@@ -1,0 +1,4 @@
+.venv
+test
+*.chart
+.DS_Store
