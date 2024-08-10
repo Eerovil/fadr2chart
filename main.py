@@ -41,19 +41,25 @@ def categorize_files(files):
     return categories
 
 
-def detect_hits(file_path, threshold=0.05):
-    """Detects percussive hits in the given audio file with a lower amplitude limit."""
+def detect_hits(file_path, threshold_ratio=0.1):
+    """Detects percussive hits in the given audio file with an auto-detected lower amplitude limit."""
     logging.info(f"Detecting hits in file: {file_path}")
     try:
         # Load the audio file
         y, sr = librosa.load(file_path, sr=None)
         
+        # Compute the maximum peak amplitude in the audio signal
+        max_amplitude = np.max(np.abs(y))
+        
+        # Automatically determine the threshold based on the maximum peak amplitude
+        threshold = threshold_ratio * max_amplitude
+        logging.info(f"Auto-detected threshold: {threshold:.4f} (ratio: {threshold_ratio})")
+        
         # Compute the RMS (Root Mean Square) energy
         rms = librosa.feature.rms(y=y)
 
         # Create a mask for frames where the RMS energy is above the threshold
-        rms_threshold = threshold
-        mask = rms > rms_threshold
+        mask = rms > threshold
         
         # Upsample the mask to match the length of `y`
         mask = np.repeat(mask, int(np.ceil(len(y) / mask.shape[1])), axis=1)
@@ -83,12 +89,12 @@ def map_to_hits(directory, categories):
             continue
         if file:
             file_path = os.path.join(directory, file)
-            threshold = 0.05
+            threshold_ratio = 0.1
             if category == 'kick':
-                threshold = 0.1
+                threshold_ratio = 0.2
             if category == 'drums-other':
-                threshold = 0.005
-            hits = detect_hits(file_path, threshold=threshold)
+                threshold_ratio = 0.05
+            hits = detect_hits(file_path, threshold_ratio=threshold_ratio)
             prev_hit = None
             for hit in hits:
                 if category == 'kick' and prev_hit and hit - prev_hit < 0.1:
@@ -243,6 +249,12 @@ def export_chart(chart, directory):
         chart_template = f.read()
 
     # Add bpm values
+
+    # Delete old ExpertDrums section
+    if '[ExpertDrums]' in chart_template:
+        pre_drums = chart_template.split('[ExpertDrums]')[0]
+        post_drums = chart_template.split('[ExpertDrums]')[1].split('}')[1]
+        chart_template = pre_drums + post_drums
 
     new_lines = """
 [ExpertDrums]
